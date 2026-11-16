@@ -1,0 +1,69 @@
+name: Upload Windows installer
+on:
+  workflow_dispatch:
+    inputs:
+      artifact_url:
+        description: Temporary download URL for the verified installer artifact
+        required: true
+        type: string
+      tag:
+        description: Existing draft release tag
+        required: true
+        default: v0.4.11
+        type: string
+permissions:
+  contents: write
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ARTIFACT_URL: ${{ inputs.artifact_url }}
+      RELEASE_TAG: ${{ inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Download only the installer artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$ARTIFACT_URL"
+          python3 - <<'PY'
+          import os, re, urllib.parse
+          url = urllib.parse.urlparse(os.environ['ARTIFACT_URL'])
+          assert url.scheme == 'https' and url.hostname and url.hostname.endswith(('.blob.core.windows.net', '.githubusercontent.com', '.amazonaws.com'))
+          assert re.fullmatch(r'v\d+\.\d+\.\d+', os.environ['RELEASE_TAG'])
+          PY
+          curl --fail --location --retry 2 --output installer.zip "$ARTIFACT_URL"
+          python3 - <<'PY'
+          import os, pathlib, shutil, zipfile
+          expected = 'HALF-iPhone-Mirror-Setup-' + os.environ['RELEASE_TAG'][1:] + '-win-x64.exe'
+          with zipfile.ZipFile('installer.zip') as archive:
+              files = [entry for entry in archive.infolist() if not entry.is_dir()]
+              assert len(files) == 1 and files[0].filename == expected
+              assert 1_000_000 < files[0].file_size < 200_000_000
+              pathlib.Path('dist').mkdir()
+              with archive.open(files[0]) as source, open('dist/' + expected, 'wb') as target:
+                  shutil.copyfileobj(source, target)
+          PY
+      - name: Upload installer and refresh checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release upload "$RELEASE_TAG" dist/*.exe --clobber
+          gh api "repos/$GH_REPO/releases/tags/$RELEASE_TAG" > release.json
+          python3 - <<'PY'
+          import json, os, pathlib
+          release = json.load(open('release.json'))
+          assert release['draft'], 'Only an existing draft release may be updated by this workflow'
+          version = os.environ['RELEASE_TAG'][1:]
+          names = ['HALF-iPhone-Mirror-Setup-' + version + '-win-x64.exe', 'HALF-iPhone-Mirror-' + version + '-win-x64.exe']
+          assets = {asset['name']: asset for asset in release['assets']}
+          lines = []
+          for name in names:
+              asset = assets[name]
+              assert asset['state'] == 'uploaded' and asset['digest'].startswith('sha256:')
+              lines.append(asset['digest'][7:] + '  ' + name + '\n')
+          pathlib.Path('dist/SHA256SUMS.txt').write_text(''.join(lines), encoding='utf-8')
+          PY
+          gh release upload "$RELEASE_TAG" dist/SHA256SUMS.txt --clobber
