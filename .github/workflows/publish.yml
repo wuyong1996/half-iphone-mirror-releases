@@ -1,15 +1,14 @@
-name: Upload Windows installer
+name: Upload verified Windows release
 on:
   workflow_dispatch:
     inputs:
       artifact_url:
-        description: Temporary download URL for the verified installer artifact
+        description: Temporary download URL for a verified private Windows release artifact
         required: true
         type: string
       tag:
         description: Existing draft release tag
         required: true
-        default: v0.4.11
         type: string
       release_id:
         description: Existing draft release ID
@@ -28,7 +27,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
     steps:
-      - name: Download only the installer artifact
+      - name: Download and verify release files
         shell: bash
         run: |
           set -euo pipefail
@@ -39,19 +38,32 @@ jobs:
           assert url.scheme == 'https' and url.hostname and url.hostname.endswith(('.blob.core.windows.net', '.githubusercontent.com', '.amazonaws.com'))
           assert re.fullmatch(r'v\d+\.\d+\.\d+', os.environ['RELEASE_TAG'])
           PY
-          curl --fail --location --retry 2 --output installer.zip "$ARTIFACT_URL"
+          curl --fail --location --retry 2 --output release.zip "$ARTIFACT_URL"
           python3 - <<'PY'
-          import os, pathlib, shutil, zipfile
-          expected = 'HALF-iPhone-Mirror-Setup-' + os.environ['RELEASE_TAG'][1:] + '-win-x64.exe'
-          with zipfile.ZipFile('installer.zip') as archive:
+          import hashlib, os, pathlib, re, shutil, zipfile
+          version = os.environ['RELEASE_TAG'][1:]
+          names = ['HALF-iPhone-Mirror-Setup-' + version + '-win-x64.exe', 'HALF-iPhone-Mirror-' + version + '-win-x64.exe']
+          with zipfile.ZipFile('release.zip') as archive:
               files = [entry for entry in archive.infolist() if not entry.is_dir()]
-              assert len(files) == 1 and files[0].filename == expected
-              assert 1_000_000 < files[0].file_size < 200_000_000
+              assert len(files) == 3 and {entry.filename for entry in files} == set(names + ['SHA256SUMS.txt'])
+              for entry in files:
+                  assert 0 < entry.file_size < (200_000_000 if entry.filename in names else 4096)
+              checksums = archive.read('SHA256SUMS.txt').decode('utf-8')
+              expected = {}
+              for line in checksums.splitlines():
+                  match = re.fullmatch(r'([0-9a-f]{64})  (.+)', line)
+                  assert match and match[2] in names and match[2] not in expected
+                  expected[match[2]] = match[1]
+              assert set(expected) == set(names)
               pathlib.Path('dist').mkdir()
-              with archive.open(files[0]) as source, open('dist/' + expected, 'wb') as target:
-                  shutil.copyfileobj(source, target)
+              for name in names:
+                  with archive.open(name) as source, open('dist/' + name, 'wb') as target:
+                      shutil.copyfileobj(source, target)
+                  content = pathlib.Path('dist/' + name).read_bytes()
+                  assert content[:2] == b'MZ' and hashlib.sha256(content).hexdigest() == expected[name]
+              pathlib.Path('dist/SHA256SUMS.txt').write_bytes(checksums.encode('utf-8'))
           PY
-      - name: Upload installer and refresh checksums
+      - name: Upload verified files to the draft
         shell: bash
         run: |
           set -euo pipefail
@@ -60,32 +72,26 @@ jobs:
           repo, release_id = os.environ['GH_REPO'], os.environ['RELEASE_ID']
           assert release_id.isdigit()
           headers = {'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'HALF-release-publisher'}
-          def api(route, method='GET', data=None):
-              request = urllib.request.Request('https://api.github.com' + route, data=data, method=method, headers=headers)
-              with urllib.request.urlopen(request, timeout=120) as response:
-                  content = response.read()
-                  return json.loads(content) if content else None
+          def api(route):
+              with urllib.request.urlopen(urllib.request.Request('https://api.github.com' + route, headers=headers), timeout=120) as response:
+                  return json.load(response)
           release = api(f'/repos/{repo}/releases/{release_id}')
           assert release['draft'] and release['tag_name'] == os.environ['RELEASE_TAG']
-          def upload(name, content):
-              for asset in release['assets']:
-                  if asset['name'] == name:
-                      api(f"/repos/{repo}/releases/assets/{asset['id']}", 'DELETE')
-              url = f'https://uploads.github.com/repos/{repo}/releases/{release_id}/assets?name=' + urllib.parse.quote(name)
-              request = urllib.request.Request(url, data=content, method='POST', headers={**headers, 'Content-Type': 'application/octet-stream'})
-              with urllib.request.urlopen(request, timeout=300) as response:
-                  asset = json.load(response)
-              assert asset['state'] == 'uploaded' and asset['digest'] == 'sha256:' + hashlib.sha256(content).hexdigest()
-              return asset
+          existing = {asset['name']: asset for asset in release['assets']}
           version = os.environ['RELEASE_TAG'][1:]
-          names = ['HALF-iPhone-Mirror-Setup-' + version + '-win-x64.exe', 'HALF-iPhone-Mirror-' + version + '-win-x64.exe']
-          assets = {asset['name']: asset for asset in release['assets']}
-          assets[names[0]] = upload(names[0], pathlib.Path('dist/' + names[0]).read_bytes())
-          lines = []
+          names = ['HALF-iPhone-Mirror-Setup-' + version + '-win-x64.exe', 'HALF-iPhone-Mirror-' + version + '-win-x64.exe', 'SHA256SUMS.txt']
+          assert set(existing).issubset(names)
           for name in names:
-              asset = assets[name]
-              assert asset['state'] == 'uploaded' and asset['digest'].startswith('sha256:')
-              lines.append(asset['digest'][7:] + '  ' + name + '\n')
-          upload('SHA256SUMS.txt', ''.join(lines).encode('utf-8'))
-          print('Uploaded installer and verified both executable checksums.')
+              content = pathlib.Path('dist/' + name).read_bytes()
+              digest = 'sha256:' + hashlib.sha256(content).hexdigest()
+              if name in existing:
+                  asset = existing[name]
+              else:
+                  url = f'https://uploads.github.com/repos/{repo}/releases/{release_id}/assets?name=' + urllib.parse.quote(name)
+                  request = urllib.request.Request(url, data=content, method='POST', headers={**headers, 'Content-Type': 'application/octet-stream'})
+                  with urllib.request.urlopen(request, timeout=300) as response:
+                      asset = json.load(response)
+              assert asset['state'] == 'uploaded' and asset['digest'] == digest and asset['size'] == len(content)
+              print('Verified upload:', name, digest)
           PY
+
