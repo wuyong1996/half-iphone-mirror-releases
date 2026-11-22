@@ -9,8 +9,7 @@ Windows USB 多 iPhone 投屏与控制工作台。
 | 文件 | 用途 |
 | --- | --- |
 | `HALF-iPhone-Mirror-Setup-版本号-win-x64.exe` | 推荐安装版，按向导安装，创建桌面与开始菜单快捷方式 |
-| `HALF-iPhone-Mirror-版本号-win-x64.exe` | 免安装版，双击直接运行 |
-| `SHA256SUMS.txt` | 两个 EXE 的 SHA-256 校验值 |
+| `SHA256SUMS.txt` | 安装包的 SHA-256 校验值 |
 
 GitHub 自动生成的 **Source code** 压缩包仅包含本发布库说明，不是 Windows 安装程序。本仓库只公开安装包和使用说明；应用源码保存在私有仓库。
 
@@ -28,4 +27,4 @@ GitHub 自动生成的 **Source code** 压缩包仅包含本发布库说明，�
 
 ## 更新
 
-当前版本没有程序内自动更新。请从 [Releases/latest](https://github.com/wuyong1996/half-iphone-mirror-releases/releases/latest) 下载新版本，退出托盘中的旧程序后安装或运行新版。
+当前版本没有程序内自动更新。请从 [Releases/latest](https://github.com/wuyong1996/half-iphone-mirror-releases/releases/latest) 下载新版本，退出托盘中的旧程序后安装新版。
