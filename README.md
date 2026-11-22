@@ -1,30 +1,25 @@
-# HALF 苹果多机投屏
+# HALF 多机投屏
 
-Windows USB 多 iPhone 投屏与控制工作台。
+在 Windows 上通过 USB 同时查看和操控多台 iPhone 与安卓手机，支持标签分组、独立大屏和选中设备同步操作。
 
-## 下载 Windows 版本
+## 下载 Windows x64 安装包
 
-打开 [最新版本 Releases](https://github.com/wuyong1996/half-iphone-mirror-releases/releases/latest)，在 **Assets** 中选择：
+打开 [最新发布](https://github.com/wuyong1996/half-iphone-mirror-releases/releases/latest)，下载以下文件。
 
 | 文件 | 用途 |
 | --- | --- |
-| `HALF-iPhone-Mirror-Setup-版本号-win-x64.exe` | 推荐安装版，按向导安装，创建桌面与开始菜单快捷方式 |
+| `HALF-iPhone-Mirror-Setup-版本号-win-x64.exe` | Windows 安装程序 |
 | `SHA256SUMS.txt` | 安装包的 SHA-256 校验值 |
 
-GitHub 自动生成的 **Source code** 压缩包仅包含本发布库说明，不是 Windows 安装程序。本仓库只公开安装包和使用说明；应用源码保存在私有仓库。
+从旧版升级前，请先从系统托盘选择「退出应用」。安装程序可创建桌面和开始菜单快捷方式。文件名沿用此前版本，安装后的工作台同时支持 iPhone 和安卓。
 
-当前程序未进行代码签名，Windows 可能显示未知发布者提示。下载后可以用 PowerShell 的 `Get-FileHash -Algorithm SHA256 文件路径` 与 `SHA256SUMS.txt` 对照校验。
+发布库提供安装包及使用说明。Windows 可能对未签名的安装程序显示未知发布者提示。可以用 PowerShell 的 `Get-FileHash -Algorithm SHA256 文件路径` 核对校验值。
 
-## 开始使用
+## 接入设备
 
-1. 电脑应已具备可正常运行的 Apple Mobile Device USB 服务。
-2. 手机通过 USB 连接，解锁并信任电脑，开启开发者模式，保留已安装且签名有效的 WebDriverAgent。
-3. 打开 HALF，等待程序发现并连接手机。可查看单台画面，选中多台后同步点击、滑动与输入。
-4. Ctrl+点击增减选机；空白处拖动框选；放大镜打开大屏。先在手机中选中输入框，再用 Ctrl+V 粘贴电脑文字。
-5. 关闭窗口后仍在托盘运行；从托盘菜单选择「退出应用」才会完全退出。
+- **iPhone**。确保 Apple Mobile Device USB 服务正常。手机解锁并信任电脑，开启开发者模式，安装签名有效的 WebDriverAgent。
+- **安卓**。开启「USB 调试」，用数据线连接后在手机上授权。部分小米和红米机型需要额外开启「USB 调试（安全设置）」才能点击和输入。只有普通 USB 调试时，仍可查看画面。
+- 打开 HALF，等待设备就绪。「设置 → 连接平台」可开关苹果和安卓接入。选中多台设备后，可同步执行共同支持的操作。
+- 安卓大屏和右键菜单的三个按键从左到右为最近任务、主页、返回。要用电脑输入文字，请先点选手机里的输入框。
 
-安装包不包含苹果 USB 驱动、手机组件、签名证书，也不会自动安装或续签手机组件。不包含系统音频、音视频录制或多指触控。安装版本可通过 Windows 设置卸载；本地设置默认保留。
-
-## 更新
-
-当前版本没有程序内自动更新。请从 [Releases/latest](https://github.com/wuyong1996/half-iphone-mirror-releases/releases/latest) 下载新版本，退出托盘中的旧程序后安装新版。
+[HALF 官网与接入指南](https://half-mirror-account.halfsuger017.workers.dev/)
